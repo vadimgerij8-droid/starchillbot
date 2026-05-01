@@ -2,25 +2,58 @@ addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
 
-const TOKEN = '8292583957:AAHT7xgEsohsRbCmbNg1PiMxvgrqXRCwUr8'
+const TOKEN = '8292583957:AAHT7xgEsohsRbCmbNg1PiMxvgrqXRCwUr8' // замініть на свій
 const API = `https://api.telegram.org/bot${TOKEN}`
-const SITE = 'https://uakino.best'
 
-// ================= TELEGRAM =================
+// ================= PET STATE (тимчасово в пам'яті) =================
+// Для постійного зберігання використовуйте KV (див. нижче)
+const pets = new Map() // chatId -> { hunger, happiness, energy, lastUpdate }
+
+const DEFAULT_STATS = { hunger: 50, happiness: 50, energy: 50, lastUpdate: Date.now() }
+
+function getPet(chatId) {
+  if (!pets.has(chatId)) {
+    pets.set(chatId, { ...DEFAULT_STATS })
+  }
+  return pets.get(chatId)
+}
+
+function updateStats(pet) {
+  const now = Date.now()
+  const elapsed = (now - pet.lastUpdate) / 1000 // секунди
+  // кожні 30 секунд голод +1, щастя -1, енергія -1 (дуже повільно)
+  if (elapsed > 30) {
+    const ticks = Math.floor(elapsed / 30)
+    pet.hunger = Math.min(100, pet.hunger + ticks)
+    pet.happiness = Math.max(0, pet.happiness - ticks)
+    pet.energy = Math.max(0, pet.energy - ticks)
+    pet.lastUpdate = now
+  }
+}
+
+function formatPet(pet) {
+  const getEmoji = v => v > 70 ? '🟢' : v > 30 ? '🟡' : '🔴'
+  return (
+    `🐾 <b>Твій улюбленець</b>\n` +
+    `${getEmoji(pet.hunger)} Голод: ${pet.hunger}/100\n` +
+    `${getEmoji(pet.happiness)} Щастя: ${pet.happiness}/100\n` +
+    `${getEmoji(pet.energy)} Енергія: ${pet.energy}/100`
+  )
+}
+
+// ================= TELEGRAM API =================
 
 async function tg(method, body) {
-  await fetch(`${API}/${method}`, {
+  const res = await fetch(`${API}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
+  return res.json()
 }
 
 const sendMessage = (chatId, text, extra = {}) =>
   tg('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...extra })
-
-const sendPhoto = (chatId, photo, caption, extra = {}) =>
-  tg('sendPhoto', { chat_id: chatId, photo, caption, parse_mode: 'HTML', ...extra })
 
 // ================= REQUEST =================
 
@@ -47,90 +80,77 @@ async function handleUpdate(update) {
     const text = update.message.text || ''
 
     if (text === '/start') {
-      return sendMessage(chatId, '🎬 Напиши назву фільму')
+      const pet = getPet(chatId)
+      updateStats(pet)
+      return sendMessage(chatId, 'Привіт! Це твій віртуальний улюбленець.\nОбери дію:', {
+        reply_markup: getMainKeyboard()
+      })
     }
 
-    return search(text, chatId)
+    // Якщо користувач написав щось не команду
+    return sendMessage(chatId, 'Використовуй кнопки або команду /start', {
+      reply_markup: getMainKeyboard()
+    })
   }
 
   if (update.callback_query) {
     const chatId = update.callback_query.message.chat.id
     const data = update.callback_query.data
+    const pet = getPet(chatId)
+    updateStats(pet)
 
-    const url = decodeURIComponent(data.replace('movie|', ''))
-
-    const page = await fetch(url).then(r => r.text())
-
-    const title = page.match(/<h1[^>]*>(.*?)<\/h1>/)?.[1] || 'Фільм'
-    const img = page.match(/og:image" content="(.*?)"/)?.[1]
-
-    const iframe = page.match(/iframe[^>]+src="(.*?)"/)?.[1]
-
-    let link = iframe ? await getStream(iframe) : null
-
-    const keyboard = link
-      ? { inline_keyboard: [[{ text: '▶️ Дивитись', url: link }]] }
-      : {}
-
-    if (img) {
-      await sendPhoto(chatId, img, `🎬 <b>${title}</b>`, keyboard)
-    } else {
-      await sendMessage(chatId, `🎬 <b>${title}</b>`, keyboard)
+    let message = ''
+    switch (data) {
+      case 'feed':
+        pet.hunger = Math.max(0, pet.hunger - 20)
+        pet.happiness = Math.min(100, pet.happiness + 5)
+        message = '🍔 Смачного! Голод зменшено.'
+        break
+      case 'play':
+        pet.happiness = Math.min(100, pet.happiness + 15)
+        pet.energy = Math.max(0, pet.energy - 10)
+        pet.hunger = Math.min(100, pet.hunger + 5)
+        message = '🎾 Весело пограли! Щастя підвищилось.'
+        break
+      case 'sleep':
+        pet.energy = Math.min(100, pet.energy + 25)
+        pet.hunger = Math.min(100, pet.hunger + 10)
+        message = '😴 Улюбленець поспав і відновив сили.'
+        break
+      case 'status':
+        message = formatPet(pet)
+        break
+      default:
+        message = 'Невідома команда'
     }
-  }
-}
 
-// ================= SEARCH =================
+    // Оновлюємо повідомлення зі статусом та кнопками
+    await tg('editMessageText', {
+      chat_id: chatId,
+      message_id: update.callback_query.message.message_id,
+      text: message + '\n\n' + formatPet(pet),
+      parse_mode: 'HTML',
+      reply_markup: getMainKeyboard()
+    })
 
-async function search(query, chatId) {
-  const body = `do=search&subaction=search&story=${encodeURIComponent(query)}`
-
-  const html = await fetch(SITE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  }).then(r => r.text())
-
-  const blocks = html.split('<div class="movie-item short-item"')
-
-  const results = []
-
-  for (const b of blocks) {
-    const link = b.match(/href="(.*?)"/)?.[1]
-    const title = b.match(/movie-title[^>]*>(.*?)<\/a>/)?.[1]
-
-    if (!link || !title) continue
-
-    results.push({
-      title: title.replace(/<.*?>/g, ''),
-      url: link.startsWith('http') ? link : SITE + link
+    // Підтвердження callback
+    await tg('answerCallbackQuery', {
+      callback_query_id: update.callback_query.id
     })
   }
-
-  if (!results.length) {
-    return sendMessage(chatId, '😕 Нічого не знайдено')
-  }
-
-  const keyboard = results.slice(0, 10).map(r => ([{
-    text: r.title,
-    callback_data: 'movie|' + encodeURIComponent(r.url)
-  }]))
-
-  await sendMessage(chatId, '🎬 Результати:', {
-    reply_markup: { inline_keyboard: keyboard }
-  })
 }
 
-// ================= STREAM =================
-
-async function getStream(url) {
-  const html = await fetch(url).then(r => r.text())
-  const iframe = html.match(/iframe[^>]+src="(.*?)"/)?.[1]
-  if (!iframe) return null
-
-  const player = await fetch(iframe).then(r => r.text())
-
-  const m3u8 = player.match(/file\s*:\s*["'](.*?\.m3u8.*?)["']/)?.[1]
-
-  return m3u8 || null
+function getMainKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🍔 Годувати', callback_data: 'feed' },
+        { text: '🎾 Грати', callback_data: 'play' }
+      ],
+      [
+        { text: '😴 Спати', callback_data: 'sleep' },
+        { text: '📊 Статус', callback_data: 'status' }
+      ]
+    ]
+  }
 }
