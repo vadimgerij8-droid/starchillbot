@@ -11,30 +11,8 @@
     apn: ''
   };
 
-  var MONO_PROXY = 'https://monoanime.animegran8.workers.dev';
-  var MONO_BASE  = 'https://animeua.club';
-
-  var GENRES = {
-    'Усі аніме':        '',
-    'Бойовики':         'boyovik',
-    'Бойові мистецтва': 'boivie',
-    'Воєнні':           'voenne',
-    'Гарем':            'garems',
-    'Драми':            'drama',
-    'Детектив':         'detektiv',
-    'Демони':           'demons',
-    'Комедії':          'komik',
-    'Роботи':           'meha',
-    'Повсякденність':   'posyardnevnist',
-    'Пригоди':          'adventures',
-    'Психологічні':     'psih',
-    'Романтика':        'romantik',
-    'Надприродні':      'weird',
-    'Фантастика':       'fantastika',
-    'Фентезі':          'fentezi',
-    'Школа':            'classes',
-    'Еччі':             'echhi'
-  };
+  // Українські балансери, які залишаємо
+  var UA_BALANSERS = ['eneyida', 'uafilm', 'uakino', 'kinotochka', 'kinoukr'];
 
   // ═══════════════════════════════════════════════════════════════
   //  BWARCH — утиліти
@@ -424,6 +402,8 @@
       return new Promise(function (resolve, reject) {
         json.forEach(function (j) {
           var name = balanserName(j);
+          // Фільтруємо: залишаємо тільки українські джерела
+          if (UA_BALANSERS.indexOf(name) === -1) return;
           sources[name] = { url: j.url, name: j.name, show: typeof j.show === 'undefined' ? true : j.show };
         });
         filter_sources = Lampa.Arrays.getKeys(sources);
@@ -450,9 +430,11 @@
           var last_balanser = _this3.getLastChoiceBalanser();
           if (!red) {
             var _filter = json.online.filter(function (c) {
+              // Фільтруємо: залишаємо тільки українські джерела
+              if (UA_BALANSERS.indexOf(balanserName(c)) === -1) return false;
               return any ? c.show : c.show && c.name.toLowerCase() === last_balanser;
             });
-            if (_filter.length) { red = true; resolve(json.online.filter(function (c) { return c.show; })); }
+            if (_filter.length) { red = true; resolve(json.online.filter(function (c) { return c.show && UA_BALANSERS.indexOf(balanserName(c)) !== -1; })); }
             else if (any) reject();
           }
         };
@@ -464,6 +446,7 @@
             filter_sources = []; sources = {};
             json.online.forEach(function (j) {
               var name = balanserName(j);
+              if (UA_BALANSERS.indexOf(name) === -1) return; // тільки українські
               sources[name] = { url: j.url, name: j.name, show: typeof j.show === 'undefined' ? true : j.show };
             });
             filter_sources = Lampa.Arrays.getKeys(sources);
@@ -1303,288 +1286,12 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  BWARCH — пошук (addSourceSearch)
-  // ═══════════════════════════════════════════════════════════════
-
-  function addSourceSearch(spiderName, spiderUri) {
-    var network = new Lampa.Reguest();
-    var source  = {
-      title: spiderName,
-      search: function (params, oncomplite) {
-        function searchComplite(links) {
-          var keys = Lampa.Arrays.getKeys(links);
-          if (keys.length) {
-            var status = new Lampa.Status(keys.length);
-            status.onComplite = function (result) {
-              var rows = [];
-              keys.forEach(function (name) {
-                var line = result[name];
-                if (line && line.data && line.type === 'similar') {
-                  var cards = line.data.map(function (item) {
-                    item.title        = Lampa.Utils.capitalizeFirstLetter(item.title);
-                    item.release_date = item.year || '0000';
-                    item.balanser     = spiderUri;
-                    if (item.img !== undefined) {
-                      if (item.img.charAt(0) === '/') item.img = Defined.localhost + item.img.substring(1);
-                      if (item.img.indexOf('/proxyimg') !== -1) item.img = account(item.img);
-                    }
-                    return item;
-                  });
-                  rows.push({ title: name, results: cards });
-                }
-              });
-              oncomplite(rows);
-            };
-            keys.forEach(function (name) {
-              network.silent(account(links[name]), function (data) {
-                status.append(name, data);
-              }, function () { status.error(); }, false, { headers: addHeaders() });
-            });
-          } else oncomplite([]);
-        }
-
-        network.silent(account(Defined.localhost + 'lite/' + spiderUri + '?title=' + params.query), function (json) {
-          if (json.rch) {
-            rchRun(json, function () {
-              network.silent(account(Defined.localhost + 'lite/' + spiderUri + '?title=' + params.query), function (links) {
-                searchComplite(links);
-              }, function () { oncomplite([]); }, false, { headers: addHeaders() });
-            });
-          } else searchComplite(json);
-        }, function () { oncomplite([]); }, false, { headers: addHeaders() });
-      },
-      onCancel: function () { network.clear(); },
-      params: { lazy: true, align_left: true, card_events: { onMenu: function () {} } },
-      onMore: function (params, close) { close(); },
-      onSelect: function (params, close) {
-        close();
-        Lampa.Activity.push({
-          url:          params.element.url,
-          title:        'Lampac - ' + params.element.title,
-          component:    'bwarch',
-          movie:        params.element,
-          page:         1,
-          search:       params.element.title,
-          clarification: true,
-          balanser:     params.element.balanser,
-          noinfo:       true
-        });
-      }
-    };
-    Lampa.Search.addSource(source);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MONOANIME — утиліти
-  // ═══════════════════════════════════════════════════════════════
-
-  function monoPx(url) { return MONO_PROXY + '?url=' + encodeURIComponent(url); }
-
-  function monoHashCode(str) {
-    var h = 0;
-    for (var i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
-    return Math.abs(h);
-  }
-
-  function monoGetHTML(url) {
-    return fetch(monoPx(url))
-      .then(function (r) { return r.text(); })
-      .then(function (html) { return new DOMParser().parseFromString(html, 'text/html'); });
-  }
-
-  function monoParseCards(doc) {
-    var out = [];
-    doc.querySelectorAll('.poster').forEach(function (card) {
-      var a     = card.tagName === 'A' ? card : card.querySelector('a');
-      var href  = a ? (a.getAttribute('href') || '') : '';
-      var img   = card.querySelector('img');
-      var src   = img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : '';
-      var tEl   = card.querySelector('.poster__title') || card.querySelector('h3');
-      var title = tEl ? tEl.textContent.trim() : 'Без назви';
-      var url   = href.startsWith('http') ? href : MONO_BASE + href;
-      if (src && !src.startsWith('http')) src = MONO_BASE + src;
-      out.push({ id: monoHashCode(url), title: title, poster: src, url: url });
-    });
-    return out;
-  }
-
-  function monoBuildPageUrl(page, genre, search) {
-    if (search) return MONO_BASE + '/index.php?do=search&subaction=search&story=' + encodeURIComponent(search) + '&page=' + page;
-    if (genre)  return page > 1 ? MONO_BASE + '/' + genre + '/page/' + page + '/' : MONO_BASE + '/' + genre + '/';
-    return page > 1 ? MONO_BASE + '/page/' + page + '/' : MONO_BASE + '/';
-  }
-
-  function monoExtractSources(html, provider) {
-    var sources = [];
-    var m = html.match(/file\s*:\s*(\[[\s\S]+?\])/i)
-         || html.match(/playlist\s*:\s*(\[[\s\S]+?\])/i);
-    if (m) {
-      try {
-        var raw = m[1].replace(/,\s*]/g, ']').replace(/,\s*}/g, '}');
-        var arr = JSON.parse(raw);
-        function walk(items, dub, season) {
-          season = season || '1';
-          (items || []).forEach(function (item) {
-            var sub = item.folder || item.playlist;
-            if (sub) {
-              var nd = dub || provider || 'UA', ns = season, t = item.title || '';
-              var sm = t.match(/[Сс]езон\s*(\d+)/);
-              if (sm) ns = sm[1]; else if (t) nd = t;
-              walk(sub, nd, ns);
-            } else if (item.file) {
-              var ep  = item.title || 'Серія';
-              var nm  = ep.match(/(\d+)\s*[Сс]ері[яіяа]|[Сс]ері[яіяа]\s*(\d+)|Еп\.?\s*(\d+)/);
-              var num = nm ? (nm[1] || nm[2] || nm[3]) : '1';
-              sources.push({ label: ep, file: item.file, dub: (dub || provider || 'UA').trim(), season: season, episode: num });
-            }
-          });
-        }
-        walk(arr, '', '1');
-      } catch (e) {}
-    }
-    if (!sources.length) {
-      (html.match(/https?:\/\/[^\s'"<>]+\.m3u8[^\s'"<>]*/g) || []).forEach(function (u, i) {
-        sources.push({ label: 'Серія ' + (i + 1), file: u, dub: provider || 'UA', season: '1', episode: String(i + 1) });
-      });
-    }
-    return sources;
-  }
-
-  function monoLoadDetail(animeUrl) {
-    return monoGetHTML(animeUrl).then(function (doc) {
-      var title = '';
-      ['.page__subcol-main h1', '.pmovie__title', 'h1'].some(function (s) {
-        var el = doc.querySelector(s);
-        if (el && el.textContent.trim()) { title = el.textContent.trim(); return true; }
-      });
-      var poster = '';
-      ['div.page__subcol-side .img-fit-cover img', '.pmovie__poster img', '.anime__poster img'].some(function (s) {
-        var el = doc.querySelector(s);
-        if (el) {
-          var src = el.getAttribute('data-src') || el.getAttribute('src') || '';
-          if (src) { poster = src.startsWith('http') ? src : MONO_BASE + src; return true; }
-        }
-      });
-      var synopsis = '';
-      ['.full-text', '.pmovie__description', '.anime__description'].some(function (s) {
-        var el = doc.querySelector(s);
-        if (el && el.textContent.trim()) { synopsis = el.textContent.trim(); return true; }
-      });
-      var iframes = [];
-      doc.querySelectorAll('iframe[src], iframe[data-src]').forEach(function (fr) {
-        var s = fr.getAttribute('src') || fr.getAttribute('data-src');
-        if (!s || s === 'about:blank') return;
-        if (s.startsWith('//')) s = 'https:' + s;
-        if (!s.startsWith('http')) s = MONO_BASE + s;
-        iframes.push(s);
-      });
-      if (!iframes.length) return { title: title, poster: poster, synopsis: synopsis, sources: [] };
-      return Promise.all(iframes.map(function (iUrl) {
-        var prov = iUrl.includes('ashdi') ? 'Ashdi' : iUrl.includes('vidmoly') ? 'Vidmoly' : 'UA';
-        return fetch(monoPx(iUrl))
-          .then(function (r) { return r.text(); })
-          .then(function (html) { return monoExtractSources(html, prov); })
-          .catch(function () { return []; });
-      })).then(function (arrays) {
-        return { title: title, poster: poster, synopsis: synopsis, sources: [].concat.apply([], arrays) };
-      });
-    });
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MONOANIME — меню вибору озвучки/серії
-  // ═══════════════════════════════════════════════════════════════
-
-  function monoShowEpisodeMenu(detail) {
-    if (!detail.sources.length) { Lampa.Noty.show('Епізоди не знайдено'); return; }
-    var tree = {};
-    detail.sources.forEach(function (s) {
-      var sn = s.season || '1', dn = s.dub || 'UA';
-      if (!tree[sn]) tree[sn] = {};
-      if (!tree[sn][dn]) tree[sn][dn] = [];
-      tree[sn][dn].push(s);
-    });
-    var seasons = Object.keys(tree).sort(function (a, b) { return +a - +b; });
-
-    function playEp(ep) {
-      Lampa.Player.play({ title: detail.title + ' — ' + ep.label, url: ep.file });
-      Lampa.Player.playlist([{ title: detail.title + ' — ' + ep.label, url: ep.file }]);
-    }
-
-    function showEps(season, dub) {
-      var eps = tree[season][dub];
-      Lampa.Select.show({
-        title: detail.title + '  [' + dub + ']  Сезон ' + season,
-        items: eps.map(function (ep) { return { title: ep.label, ep: ep }; }),
-        onSelect: function (a) { playEp(a.ep); },
-        onBack: function () { Lampa.Controller.toggle('full_start'); }
-      });
-    }
-
-    function showDubs(season) {
-      var dubs = Object.keys(tree[season]);
-      if (dubs.length === 1) { showEps(season, dubs[0]); return; }
-      Lampa.Select.show({
-        title: detail.title + ' — Озвучка',
-        items: dubs.map(function (d) { return { title: '🎙 ' + d, dub: d }; }),
-        onSelect: function (a) { showEps(season, a.dub); },
-        onBack: function () { Lampa.Controller.toggle('full_start'); }
-      });
-    }
-
-    if (seasons.length === 1) showDubs(seasons[0]);
-    else {
-      Lampa.Select.show({
-        title: detail.title + ' — Сезон',
-        items: seasons.map(function (s) { return { title: 'Сезон ' + s, season: s }; }),
-        onSelect: function (a) { showDubs(a.season); },
-        onBack: function () { Lampa.Controller.toggle('full_start'); }
-      });
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  MONOANIME — компонент (список карток)
-  // ═══════════════════════════════════════════════════════════════
-
-  function MonoAnimeComponent(object) {
-    var comp = new Lampa.InteractionCategory(object);
-
-    function toCard(a) {
-      return {
-        id: a.id, title: a.title, original: a.title,
-        release_date: '', poster: a.poster, img: a.poster,
-        background_image: a.poster, vote_average: '',
-        source: 'monoanime', url: a.url
-      };
-    }
-
-    comp.create = function () {
-      var url = monoBuildPageUrl(object.page || 1, object.genre || '', object.search || '');
-      monoGetHTML(url).then(function (doc) {
-        var items = monoParseCards(doc).map(toCard);
-        if (items.length) comp.build({ results: items, page: object.page || 1 });
-        else comp.empty();
-      }).catch(function () { comp.empty(); });
-    };
-
-    comp.nextPageReuest = function (obj, resolve, reject) {
-      var url = monoBuildPageUrl(obj.page || 1, obj.genre || '', obj.search || '');
-      monoGetHTML(url).then(function (doc) {
-        resolve({ results: monoParseCards(doc).map(toCard), page: obj.page || 1 });
-      }).catch(reject);
-    };
-
-    return comp;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  //  СТАРТ ПЛАГІНА
+  //  СТАРТ ПЛАГІНА (тільки BWARCH, тільки українські джерела)
   // ═══════════════════════════════════════════════════════════════
 
   function startPlugin() {
-    if (window.bwarch_monoanime_plugin) return;
-    window.bwarch_monoanime_plugin = true;
+    if (window.bwarch_ua_plugin) return;
+    window.bwarch_ua_plugin = true;
 
     // ── Локалізація ──────────────────────────────────────────────
     Lampa.Lang.add({
@@ -1608,8 +1315,7 @@
         en: 'The source will be switched automatically after <span class="timeout">10</span> seconds.',
         zh: '平衡器将在<span class="timeout">10</span>秒内自动切换。'
       },
-      lampac_does_not_answer_text: { ru: 'Поиск не дал результатов', uk: 'Пошук не дав результатів', en: 'Search did not return any results', zh: '搜索未返回任何结果' },
-      monoanime_watch: { ru: 'AnimeUA', uk: 'AnimeUA', en: 'AnimeUA', zh: 'AnimeUA' }
+      lampac_does_not_answer_text: { ru: 'Поиск не дал результатов', uk: 'Пошук не дав результатів', en: 'Search did not return any results', zh: '搜索未返回任何结果' }
     });
 
     // ── CSS ──────────────────────────────────────────────────────
@@ -1628,9 +1334,9 @@
 
     // ── Маніфест — bwarch ────────────────────────────────────────
     var manifst = {
-      type: 'video', version: '1.7.1',
-      name: 'BwaRC',
-      description: 'Плагін для перегляду онлайн серіалів і фільмів + AnimeUA',
+      type: 'video', version: '1.7.1-ua',
+      name: 'BwaRC (UA only)',
+      description: 'Плагін для перегляду онлайн серіалів і фільмів (тільки українські джерела)',
       component: 'bwarch',
       onContextMenu: function (object) { return { name: Lampa.Lang.translate('lampac_watch'), description: '' }; },
       onContextLauch: function (object) {
@@ -1651,18 +1357,13 @@
     Lampa.Manifest.plugins = manifst;
 
     // ── Реєстрація компонентів ───────────────────────────────────
-    Lampa.Component.add('bwarch',     component);
-    Lampa.Component.add('monoanime',  MonoAnimeComponent);
+    Lampa.Component.add('bwarch', component);
     resetTemplates();
 
     // ── Кнопка "Онлайн" (bwarch) у full-start ───────────────────
-    var bwarchButtonHtml = "<div class=\"full-start__button selector view--online lampac--button\" data-subtitle=\"BwaRC v1.7.1\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 392.697 392.697\"><path d=\"M21.837,83.419l36.496,16.678L227.72,19.886c1.229-0.592,2.002-1.846,1.98-3.209c-0.021-1.365-0.834-2.592-2.082-3.145L197.766,0.3c-0.903-0.4-1.933-0.4-2.837,0L21.873,77.036c-1.259,0.559-2.073,1.803-2.081,3.18C19.784,81.593,20.584,82.847,21.837,83.419z\" fill=\"currentColor\"></path><path d=\"M185.689,177.261l-64.988-30.01v91.617c0,0.856-0.44,1.655-1.167,2.114c-0.406,0.257-0.869,0.386-1.333,0.386c-0.368,0-0.736-0.082-1.079-0.244l-68.874-32.625c-0.869-0.416-1.421-1.293-1.421-2.256v-92.229L6.804,95.5c-1.083-0.496-2.344-0.406-3.347,0.238c-1.002,0.645-1.608,1.754-1.608,2.944v208.744c0,1.371,0.799,2.615,2.045,3.185l178.886,81.768c0.464,0.211,0.96,0.315,1.455,0.315c0.661,0,1.318-0.188,1.892-0.555c1.002-0.645,1.608-1.754,1.608-2.945V180.445C187.735,179.076,186.936,177.831,185.689,177.261z\" fill=\"currentColor\"></path><path d=\"M389.24,95.74c-1.002-0.644-2.264-0.732-3.347-0.238l-178.876,81.76c-1.246,0.57-2.045,1.814-2.045,3.185v208.751c0,1.191,0.606,2.302,1.608,2.945c0.572,0.367,1.23,0.555,1.892,0.555c0.495,0,0.991-0.104,1.455-0.315l178.876-81.768c1.246-0.568,2.045-1.813,2.045-3.185V98.685C390.849,97.494,390.242,96.384,389.24,95.74z\" fill=\"currentColor\"></path><path d=\"M372.915,80.216c-0.009-1.377-0.823-2.621-2.082-3.18l-60.182-26.681c-0.938-0.418-2.013-0.399-2.938,0.045l-173.755,82.992l60.933,29.117c0.462,0.211,0.958,0.316,1.455,0.316s0.993-0.105,1.455-0.316l173.066-79.092C372.122,82.847,372.923,81.593,372.915,80.216z\" fill=\"currentColor\"></path></svg><span>#{title_online}</span></div>";
+    var bwarchButtonHtml = "<div class=\"full-start__button selector view--online lampac--button\" data-subtitle=\"BwaRC UA v1.7.1\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 392.697 392.697\"><path d=\"M21.837,83.419l36.496,16.678L227.72,19.886c1.229-0.592,2.002-1.846,1.98-3.209c-0.021-1.365-0.834-2.592-2.082-3.145L197.766,0.3c-0.903-0.4-1.933-0.4-2.837,0L21.873,77.036c-1.259,0.559-2.073,1.803-2.081,3.18C19.784,81.593,20.584,82.847,21.837,83.419z\" fill=\"currentColor\"></path><path d=\"M185.689,177.261l-64.988-30.01v91.617c0,0.856-0.44,1.655-1.167,2.114c-0.406,0.257-0.869,0.386-1.333,0.386c-0.368,0-0.736-0.082-1.079-0.244l-68.874-32.625c-0.869-0.416-1.421-1.293-1.421-2.256v-92.229L6.804,95.5c-1.083-0.496-2.344-0.406-3.347,0.238c-1.002,0.645-1.608,1.754-1.608,2.944v208.744c0,1.371,0.799,2.615,2.045,3.185l178.886,81.768c0.464,0.211,0.96,0.315,1.455,0.315c0.661,0,1.318-0.188,1.892-0.555c1.002-0.645,1.608-1.754,1.608-2.945V180.445C187.735,179.076,186.936,177.831,185.689,177.261z\" fill=\"currentColor\"></path><path d=\"M389.24,95.74c-1.002-0.644-2.264-0.732-3.347-0.238l-178.876,81.76c-1.246,0.57-2.045,1.814-2.045,3.185v208.751c0,1.191,0.606,2.302,1.608,2.945c0.572,0.367,1.23,0.555,1.892,0.555c0.495,0,0.991-0.104,1.455-0.315l178.876-81.768c1.246-0.568,2.045-1.813,2.045-3.185V98.685C390.849,97.494,390.242,96.384,389.24,95.74z\" fill=\"currentColor\"></path><path d=\"M372.915,80.216c-0.009-1.377-0.823-2.621-2.082-3.18l-60.182-26.681c-0.938-0.418-2.013-0.399-2.938,0.045l-173.755,82.992l60.933,29.117c0.462,0.211,0.958,0.316,1.455,0.316s0.993-0.105,1.455-0.316l173.066-79.092C372.122,82.847,372.923,81.593,372.915,80.216z\" fill=\"currentColor\"></path></svg><span>#{title_online}</span></div>";
 
-    // ── Кнопка "AnimeUA" у full-start ────────────────────────────
-    var monoButtonHtml = "<div class=\"full-start__button selector view--online mono--button\" data-subtitle=\"AnimeUA\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><polygon points=\"5 3 19 12 5 21 5 3\"/></svg><span>AnimeUA</span></div>";
-
-    function addButtons(e) {
-      // Кнопка bwarch
+    function addButton(e) {
       if (!e.render.find('.lampac--button').length) {
         var btn = $(Lampa.Lang.translate(bwarchButtonHtml));
         btn.on('hover:enter', function () {
@@ -1681,30 +1382,11 @@
         });
         e.render.after(btn);
       }
-
-      // Кнопка monoanime — тільки якщо є аніме-теги або завжди (можна обмежити)
-      if (!e.render.find('.mono--button').length) {
-        var monoBtn = $(monoButtonHtml);
-        monoBtn.on('hover:enter', function () {
-          Lampa.Noty.show('Завантаження AnimeUA...');
-          monoLoadDetail(
-            // Пробуємо знайти url картки або шукаємо по назві
-            e.movie.url ||
-            (MONO_BASE + '/index.php?do=search&subaction=search&story=' + encodeURIComponent(e.movie.title || e.movie.name || ''))
-          ).then(function (detail) {
-            monoShowEpisodeMenu(detail);
-          }).catch(function (err) {
-            Lampa.Noty.show('Помилка AnimeUA: ' + String(err));
-          });
-        });
-        // Вставляємо після кнопки bwarch
-        e.render.next('.lampac--button').after(monoBtn);
-      }
     }
 
     Lampa.Listener.follow('full', function (e) {
       if (e.type === 'complite') {
-        addButtons({
+        addButton({
           render: e.object.activity.render().find('.view--torrent'),
           movie:  e.data.movie
         });
@@ -1713,60 +1395,16 @@
 
     try {
       if (Lampa.Activity.active().component === 'full') {
-        addButtons({
+        addButton({
           render: Lampa.Activity.active().activity.render().find('.view--torrent'),
           movie:  Lampa.Activity.active().card
         });
       }
     } catch (e) {}
 
-    // ── Меню бічної панелі — MonoAnime ───────────────────────────
-    function addMonoMenu() {
-      var $btn = $('<li class="menu__item selector">'
-        + '<div class="menu__ico"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>'
-        + '<div class="menu__text">MonoAnime</div></li>');
-      $btn.on('hover:enter', function () {
-        Lampa.Activity.push({ url: '', title: 'MonoAnime', component: 'monoanime', page: 1 });
-      });
-      $('.menu .menu__list').eq(0).append($btn);
-    }
-
-    if (window.appready) addMonoMenu();
-    else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') addMonoMenu(); });
-
-    // ── Налаштування — жанри MonoAnime ──────────────────────────
-    Lampa.SettingsApi.addComponent({
-      component: 'monoanime',
-      icon: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
-      name: 'MonoAnime'
-    });
-    Lampa.SettingsApi.addParam({ component: 'monoanime', param: { type: 'title' }, field: { name: 'Жанри' } });
-    Object.keys(GENRES).forEach(function (name) {
-      var slug = GENRES[name];
-      Lampa.SettingsApi.addParam({
-        component: 'monoanime',
-        param: { type: 'button', name: 'mono_' + (slug || 'all') },
-        field: { name: name },
-        onChange: function () {
-          Lampa.Activity.push({ url: '', title: name, component: 'monoanime', genre: slug, page: 1 });
-        }
-      });
-    });
-
-    // ── Sync storage (bwarch) ────────────────────────────────────
+    // ── Sync storage (тільки українські балансери) ──────────────
     if (Lampa.Manifest.app_digital >= 177) {
-      var balansers_sync = [
-        'filmix','filmixtv','fxapi','rezka','pizdatoehd','getstv','kinopub',
-        'zetflixdb','collaps','hdvb','kodik','bamboo','eneyida','kinoukr',
-        'uafilm','uakino','kinotochka','remux','anilibria','animedia',
-        'animego','animevost','animebesst','alloha','mirage','phantom',
-        'animelib','moonanime','vibix','fancdn','cdnvideohub','vokino',
-        'hydraflix','videasy','vidsrc','movpi','vidlink','smashystream',
-        'autoembed','pidtor','videoseed','iptvonline','veoveo','kinoflix',
-        'leproduction','vkmovie','kinogo','kinobase','asiage',
-        'geosaitebi','mikai','dreamerscast'
-      ];
-      balansers_sync.forEach(function (name) {
+      UA_BALANSERS.forEach(function (name) {
         Lampa.Storage.sync('online_choice_' + name, 'object_object');
       });
     }
