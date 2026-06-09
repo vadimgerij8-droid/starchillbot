@@ -11,9 +11,6 @@
     apn: ''
   };
 
-  // Українські балансери, які залишаємо
-  var UA_BALANSERS = ['eneyida', 'uafilm', 'uakino', 'kinotochka', 'kinoukr'];
-
   // ═══════════════════════════════════════════════════════════════
   //  BWARCH — утиліти
   // ═══════════════════════════════════════════════════════════════
@@ -402,8 +399,6 @@
       return new Promise(function (resolve, reject) {
         json.forEach(function (j) {
           var name = balanserName(j);
-          // Фільтруємо: залишаємо тільки українські джерела
-          if (UA_BALANSERS.indexOf(name) === -1) return;
           sources[name] = { url: j.url, name: j.name, show: typeof j.show === 'undefined' ? true : j.show };
         });
         filter_sources = Lampa.Arrays.getKeys(sources);
@@ -430,11 +425,9 @@
           var last_balanser = _this3.getLastChoiceBalanser();
           if (!red) {
             var _filter = json.online.filter(function (c) {
-              // Фільтруємо: залишаємо тільки українські джерела
-              if (UA_BALANSERS.indexOf(balanserName(c)) === -1) return false;
               return any ? c.show : c.show && c.name.toLowerCase() === last_balanser;
             });
-            if (_filter.length) { red = true; resolve(json.online.filter(function (c) { return c.show && UA_BALANSERS.indexOf(balanserName(c)) !== -1; })); }
+            if (_filter.length) { red = true; resolve(json.online.filter(function (c) { return c.show; })); }
             else if (any) reject();
           }
         };
@@ -446,7 +439,6 @@
             filter_sources = []; sources = {};
             json.online.forEach(function (j) {
               var name = balanserName(j);
-              if (UA_BALANSERS.indexOf(name) === -1) return; // тільки українські
               sources[name] = { url: j.url, name: j.name, show: typeof j.show === 'undefined' ? true : j.show };
             });
             filter_sources = Lampa.Arrays.getKeys(sources);
@@ -1286,12 +1278,12 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  СТАРТ ПЛАГІНА (тільки BWARCH, тільки українські джерела)
+  //  СТАРТ ПЛАГІНА
   // ═══════════════════════════════════════════════════════════════
 
   function startPlugin() {
-    if (window.bwarch_ua_plugin) return;
-    window.bwarch_ua_plugin = true;
+    if (window.bwarch_plugin) return;
+    window.bwarch_plugin = true;
 
     // ── Локалізація ──────────────────────────────────────────────
     Lampa.Lang.add({
@@ -1334,9 +1326,9 @@
 
     // ── Маніфест — bwarch ────────────────────────────────────────
     var manifst = {
-      type: 'video', version: '1.7.1-ua',
-      name: 'BwaRC (UA only)',
-      description: 'Плагін для перегляду онлайн серіалів і фільмів (тільки українські джерела)',
+      type: 'video', version: '1.7.1',
+      name: 'BwaRC',
+      description: 'Плагін для перегляду онлайн серіалів і фільмів',
       component: 'bwarch',
       onContextMenu: function (object) { return { name: Lampa.Lang.translate('lampac_watch'), description: '' }; },
       onContextLauch: function (object) {
@@ -1356,14 +1348,14 @@
     };
     Lampa.Manifest.plugins = manifst;
 
-    // ── Реєстрація компонентів ───────────────────────────────────
+    // ── Реєстрація компонента ────────────────────────────────────
     Lampa.Component.add('bwarch', component);
     resetTemplates();
 
     // ── Кнопка "Онлайн" (bwarch) у full-start ───────────────────
-    var bwarchButtonHtml = "<div class=\"full-start__button selector view--online lampac--button\" data-subtitle=\"BwaRC UA v1.7.1\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 392.697 392.697\"><path d=\"M21.837,83.419l36.496,16.678L227.72,19.886c1.229-0.592,2.002-1.846,1.98-3.209c-0.021-1.365-0.834-2.592-2.082-3.145L197.766,0.3c-0.903-0.4-1.933-0.4-2.837,0L21.873,77.036c-1.259,0.559-2.073,1.803-2.081,3.18C19.784,81.593,20.584,82.847,21.837,83.419z\" fill=\"currentColor\"></path><path d=\"M185.689,177.261l-64.988-30.01v91.617c0,0.856-0.44,1.655-1.167,2.114c-0.406,0.257-0.869,0.386-1.333,0.386c-0.368,0-0.736-0.082-1.079-0.244l-68.874-32.625c-0.869-0.416-1.421-1.293-1.421-2.256v-92.229L6.804,95.5c-1.083-0.496-2.344-0.406-3.347,0.238c-1.002,0.645-1.608,1.754-1.608,2.944v208.744c0,1.371,0.799,2.615,2.045,3.185l178.886,81.768c0.464,0.211,0.96,0.315,1.455,0.315c0.661,0,1.318-0.188,1.892-0.555c1.002-0.645,1.608-1.754,1.608-2.945V180.445C187.735,179.076,186.936,177.831,185.689,177.261z\" fill=\"currentColor\"></path><path d=\"M389.24,95.74c-1.002-0.644-2.264-0.732-3.347-0.238l-178.876,81.76c-1.246,0.57-2.045,1.814-2.045,3.185v208.751c0,1.191,0.606,2.302,1.608,2.945c0.572,0.367,1.23,0.555,1.892,0.555c0.495,0,0.991-0.104,1.455-0.315l178.876-81.768c1.246-0.568,2.045-1.813,2.045-3.185V98.685C390.849,97.494,390.242,96.384,389.24,95.74z\" fill=\"currentColor\"></path><path d=\"M372.915,80.216c-0.009-1.377-0.823-2.621-2.082-3.18l-60.182-26.681c-0.938-0.418-2.013-0.399-2.938,0.045l-173.755,82.992l60.933,29.117c0.462,0.211,0.958,0.316,1.455,0.316s0.993-0.105,1.455-0.316l173.066-79.092C372.122,82.847,372.923,81.593,372.915,80.216z\" fill=\"currentColor\"></path></svg><span>#{title_online}</span></div>";
+    var bwarchButtonHtml = "<div class=\"full-start__button selector view--online lampac--button\" data-subtitle=\"BwaRC v1.7.1\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 392.697 392.697\"><path d=\"M21.837,83.419l36.496,16.678L227.72,19.886c1.229-0.592,2.002-1.846,1.98-3.209c-0.021-1.365-0.834-2.592-2.082-3.145L197.766,0.3c-0.903-0.4-1.933-0.4-2.837,0L21.873,77.036c-1.259,0.559-2.073,1.803-2.081,3.18C19.784,81.593,20.584,82.847,21.837,83.419z\" fill=\"currentColor\"></path><path d=\"M185.689,177.261l-64.988-30.01v91.617c0,0.856-0.44,1.655-1.167,2.114c-0.406,0.257-0.869,0.386-1.333,0.386c-0.368,0-0.736-0.082-1.079-0.244l-68.874-32.625c-0.869-0.416-1.421-1.293-1.421-2.256v-92.229L6.804,95.5c-1.083-0.496-2.344-0.406-3.347,0.238c-1.002,0.645-1.608,1.754-1.608,2.944v208.744c0,1.371,0.799,2.615,2.045,3.185l178.886,81.768c0.464,0.211,0.96,0.315,1.455,0.315c0.661,0,1.318-0.188,1.892-0.555c1.002-0.645,1.608-1.754,1.608-2.945V180.445C187.735,179.076,186.936,177.831,185.689,177.261z\" fill=\"currentColor\"></path><path d=\"M389.24,95.74c-1.002-0.644-2.264-0.732-3.347-0.238l-178.876,81.76c-1.246,0.57-2.045,1.814-2.045,3.185v208.751c0,1.191,0.606,2.302,1.608,2.945c0.572,0.367,1.23,0.555,1.892,0.555c0.495,0,0.991-0.104,1.455-0.315l178.876-81.768c1.246-0.568,2.045-1.813,2.045-3.185V98.685C390.849,97.494,390.242,96.384,389.24,95.74z\" fill=\"currentColor\"></path><path d=\"M372.915,80.216c-0.009-1.377-0.823-2.621-2.082-3.18l-60.182-26.681c-0.938-0.418-2.013-0.399-2.938,0.045l-173.755,82.992l60.933,29.117c0.462,0.211,0.958,0.316,1.455,0.316s0.993-0.105,1.455-0.316l173.066-79.092C372.122,82.847,372.923,81.593,372.915,80.216z\" fill=\"currentColor\"></path></svg><span>#{title_online}</span></div>";
 
-    function addButton(e) {
+    function addButtons(e) {
       if (!e.render.find('.lampac--button').length) {
         var btn = $(Lampa.Lang.translate(bwarchButtonHtml));
         btn.on('hover:enter', function () {
@@ -1386,7 +1378,7 @@
 
     Lampa.Listener.follow('full', function (e) {
       if (e.type === 'complite') {
-        addButton({
+        addButtons({
           render: e.object.activity.render().find('.view--torrent'),
           movie:  e.data.movie
         });
@@ -1395,16 +1387,27 @@
 
     try {
       if (Lampa.Activity.active().component === 'full') {
-        addButton({
+        addButtons({
           render: Lampa.Activity.active().activity.render().find('.view--torrent'),
           movie:  Lampa.Activity.active().card
         });
       }
     } catch (e) {}
 
-    // ── Sync storage (тільки українські балансери) ──────────────
+    // ── Sync storage (bwarch) ────────────────────────────────────
     if (Lampa.Manifest.app_digital >= 177) {
-      UA_BALANSERS.forEach(function (name) {
+      var balansers_sync = [
+        'filmix','filmixtv','fxapi','rezka','pizdatoehd','getstv','kinopub',
+        'zetflixdb','collaps','hdvb','kodik','bamboo','eneyida','kinoukr',
+        'uafilm','uakino','kinotochka','remux','anilibria','animedia',
+        'animego','animevost','animebesst','alloha','mirage','phantom',
+        'animelib','moonanime','vibix','fancdn','cdnvideohub','vokino',
+        'hydraflix','videasy','vidsrc','movpi','vidlink','smashystream',
+        'autoembed','pidtor','videoseed','iptvonline','veoveo','kinoflix',
+        'leproduction','vkmovie','kinogo','kinobase','asiage',
+        'geosaitebi','mikai','dreamerscast'
+      ];
+      balansers_sync.forEach(function (name) {
         Lampa.Storage.sync('online_choice_' + name, 'object_object');
       });
     }
